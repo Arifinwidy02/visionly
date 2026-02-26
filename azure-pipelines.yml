@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Nama App Service di Azure Anda
-  azureWebAppName: 'GANTI_NAMA_APP_AZURE_ANDA' 
+  azureWebAppName: 'visionly' 
 
 stages:
 - stage: Build_and_Deploy_Backend
@@ -22,7 +22,7 @@ stages:
     # Task untuk deploy ke Azure Web App
     - task: AzureWebApp@1
       inputs:
-        azureSubscription: 'NAMA_KONEKSI_SUBSCRIPTION_ANDA'
+        azureSubscription: 'MyAzureConnection'
         appName: $(azureWebAppName)
         package: '$(System.DefaultWorkingDirectory)'
 
