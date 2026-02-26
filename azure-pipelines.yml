@@ -1,0 +1,45 @@
+trigger:
+- main
+
+variables:
+  # Nama App Service di Azure Anda
+  azureWebAppName: 'GANTI_NAMA_APP_AZURE_ANDA' 
+
+stages:
+- stage: Build_and_Deploy_Backend
+  jobs:
+  - job: Deploy_Azure
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18.x'
+    - script: |
+        npm install
+        npm run build --if-present
+      displayName: 'Install and Build Backend'
+    # Task untuk deploy ke Azure Web App
+    - task: AzureWebApp@1
+      inputs:
+        azureSubscription: 'NAMA_KONEKSI_SUBSCRIPTION_ANDA'
+        appName: $(azureWebAppName)
+        package: '$(System.DefaultWorkingDirectory)'
+
+- stage: Build_Android
+  dependsOn: Build_and_Deploy_Backend # Menunggu backend sukses baru build app
+  jobs:
+  - job: Build_APK_AAB
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '18.x'
+    - script: npm install
+      displayName: 'Install Dependencies'
+    - script: |
+        cd android
+        ./gradlew bundleRelease
+      displayName: 'Build Android Bundle (.aab)'
+    # Nanti di sini kita tambahkan task Google Play Store
