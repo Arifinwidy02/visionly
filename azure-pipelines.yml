@@ -1,64 +1,67 @@
 trigger:
-- main
+  - main
 
 variables:
   azureWebAppName: 'visionly'
 
 stages:
-- stage: Build_and_Deploy_Backend
-  jobs:
-  - job: Deploy_Azure
-    pool:
-      vmImage: 'ubuntu-latest'
-    steps:
-    - task: NodeTool@0
-      inputs:
-        versionSpec: '18.x'
-    - script: |
-        npm install
-        npm run build --if-present
-      displayName: 'Install and Build Backend'
-    - task: AzureWebApp@1
-      inputs:
-        azureSubscription: 'MyAzureConnection'
-        appName: $(azureWebAppName)
-        package: '$(System.DefaultWorkingDirectory)'
+  - stage: Build_and_Deploy_Backend
+    jobs:
+      - job: Deploy_Azure
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x' # Kita samakan dengan versi di Azure Portal kamu
 
-- stage: Build_Android
-  dependsOn: Build_and_Deploy_Backend 
-  jobs:
-  - job: Build_APK_AAB
-    pool:
-      vmImage: 'ubuntu-latest' 
-    variables:
-    - group: visionly-secrets # Pastikan nama ini sama dengan di menu Library
-    steps:
-    - task: NodeTool@0
-      inputs:
-        versionSpec: '18.x'
-    
-    - script: npm install
-      displayName: 'Install Dependencies'
+          # Gunakan Yarn untuk install
+          - script: |
+              yarn install
+              yarn build --if-present
+            displayName: 'Install and Build Backend with Yarn'
 
-    # Membuat file .env untuk API Key Gemini
-    - script: |
-        echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
-      displayName: 'Inject Gemini API Key'
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: 'MyAzureConnection'
+              appName: $(azureWebAppName)
+              package: '$(System.DefaultWorkingDirectory)'
 
-    - script: |
-        cd android
-        chmod +x gradlew
-        ./gradlew bundleRelease assembleRelease 
-      displayName: 'Build Android (AAB & APK)'
+  - stage: Build_Android
+    dependsOn: Build_and_Deploy_Backend
+    jobs:
+      - job: Build_APK_AAB
+        pool:
+          vmImage: 'ubuntu-latest'
+        variables:
+          - group: visionly-secrets
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: 'android/app/build/outputs/bundle/release'
-        ArtifactName: 'Android-App-Bundle'
-        publishLocation: 'Container'
+          # Gunakan Yarn di sini juga
+          - script: yarn install
+            displayName: 'Install Dependencies with Yarn'
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-        PathtoPublish: 'android/app/build/outputs/apk/release'
-        ArtifactName: 'Android-APK-Installable'
-        publishLocation: 'Container'
+          - script: |
+              echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
+            displayName: 'Inject Gemini API Key'
+
+          - script: |
+              cd android
+              chmod +x gradlew
+              ./gradlew bundleRelease assembleRelease
+            displayName: 'Build Android (AAB & APK)'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'android/app/build/outputs/bundle/release'
+              ArtifactName: 'Android-App-Bundle'
+              publishLocation: 'Container'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'android/app/build/outputs/apk/release'
+              ArtifactName: 'Android-APK-Installable'
+              publishLocation: 'Container'
