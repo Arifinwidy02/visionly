@@ -2,10 +2,12 @@ trigger:
   - main
 
 variables:
+  # Nama App Service di Azure (Pastikan sama dengan yang dibuat di portal)
   azureWebAppName: 'visionly'
 
 stages:
   - stage: Build_and_Deploy_Backend
+    displayName: 'Deploy Backend'
     jobs:
       - job: Deploy_Azure
         pool:
@@ -13,37 +15,40 @@ stages:
         steps:
           - task: NodeTool@0
             inputs:
-              versionSpec: '20.x' # Kita samakan dengan versi di Azure Portal kamu
+              versionSpec: '22.x'
+            displayName: 'Install Node.js 22'
 
-          # Gunakan Yarn untuk install
           - script: |
-              yarn install
-              yarn build --if-present
-            displayName: 'Install and Build Backend with Yarn'
+              yarn install --ignore-engines
+            displayName: 'Install Dependencies with Yarn'
 
           - task: AzureWebApp@1
             inputs:
               azureSubscription: 'MyAzureConnection'
               appName: $(azureWebAppName)
               package: '$(System.DefaultWorkingDirectory)'
+            displayName: 'Deploy to Azure Web App'
 
   - stage: Build_Android
+    displayName: 'Build Android App'
     dependsOn: Build_and_Deploy_Backend
     jobs:
       - job: Build_APK_AAB
         pool:
           vmImage: 'ubuntu-latest'
         variables:
-          - group: visionly-secrets
+          - group: visionly-secrets # Pastikan nama ini sama dengan di Library > Variable Groups
         steps:
           - task: NodeTool@0
             inputs:
-              versionSpec: '20.x'
+              versionSpec: '22.x'
+            displayName: 'Install Node.js 22'
 
-          # Gunakan Yarn di sini juga
-          - script: yarn install
+          - script: |
+              yarn install --ignore-engines
             displayName: 'Install Dependencies with Yarn'
 
+          # Membuat file .env secara dinamis untuk API Key Gemini
           - script: |
               echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
             displayName: 'Inject Gemini API Key'
@@ -54,12 +59,14 @@ stages:
               ./gradlew bundleRelease assembleRelease
             displayName: 'Build Android (AAB & APK)'
 
+          # Upload AAB (untuk Play Store)
           - task: PublishBuildArtifacts@1
             inputs:
               PathtoPublish: 'android/app/build/outputs/bundle/release'
               ArtifactName: 'Android-App-Bundle'
               publishLocation: 'Container'
 
+          # Upload APK (untuk Install Manual/Testing)
           - task: PublishBuildArtifacts@1
             inputs:
               PathtoPublish: 'android/app/build/outputs/apk/release'
