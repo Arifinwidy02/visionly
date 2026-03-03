@@ -33,42 +33,41 @@ stages:
     displayName: 'Build Android App'
     dependsOn: Build_and_Deploy_Backend
     jobs:
-      - job: Build_APK_AAB
-        pool:
-          vmImage: 'ubuntu-latest'
-        variables:
-          - group: visionly-secrets # Pastikan nama ini sama dengan di Library > Variable Groups
-        steps:
-          - task: NodeTool@0
-            inputs:
-              versionSpec: '22.x'
-            displayName: 'Install Node.js 22'
+  - job: Build_APK_AAB
+    pool:
+      vmImage: 'ubuntu-latest'
+    variables:
+      - group: visionly-secrets
+    steps:
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '22.x'
 
-          - script: |
-              yarn install --ignore-engines
-            displayName: 'Install Dependencies with Yarn'
+      - script: yarn install --ignore-engines
+        displayName: 'Install Dependencies'
 
-          # Membuat file .env secara dinamis untuk API Key Gemini
-          - script: |
-              echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
-            displayName: 'Inject Gemini API Key'
+      - script: echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
+        displayName: 'Inject Gemini API Key'
 
-          - script: |
-              cd android
-              chmod +x gradlew
-              ./gradlew bundleRelease assembleRelease
-            displayName: 'Build Android (AAB & APK)'
+      # Task untuk mendownload file Keystore secara aman
+      - task: DownloadSecureFile@1
+        name: releaseKeystore
+        inputs:
+          secureFile: 'visionly-release.keystore'
 
-          # Upload AAB (untuk Play Store)
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: 'android/app/build/outputs/bundle/release'
-              ArtifactName: 'Android-App-Bundle'
-              publishLocation: 'Container'
+      - script: |
+          cd android
+          chmod +x gradlew
+          # Build AAB dalam mode Release
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=$(releaseKeystore.secureFilePath) \
+            -Pandroid.injected.signing.store.password=$(KEYSTORE_PASSWORD) \
+            -Pandroid.injected.signing.key.alias=$(KEY_ALIAS) \
+            -Pandroid.injected.signing.key.password=$(KEY_PASSWORD)
+        displayName: 'Build Signed Android Bundle (.aab)'
 
-          # Upload APK (untuk Install Manual/Testing)
-          - task: PublishBuildArtifacts@1
-            inputs:
-              PathtoPublish: 'android/app/build/outputs/apk/release'
-              ArtifactName: 'Android-APK-Installable'
-              publishLocation: 'Container'
+      - task: PublishBuildArtifacts@1
+        inputs:
+          PathtoPublish: 'android/app/build/outputs/bundle/release'
+          ArtifactName: 'Android-App-Bundle-Signed'
+          publishLocation: 'Container'
