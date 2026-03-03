@@ -1,73 +1,75 @@
 trigger:
-  - main
+- main
 
 variables:
-  # Nama App Service di Azure (Pastikan sama dengan yang dibuat di portal)
   azureWebAppName: 'visionly'
 
 stages:
-  - stage: Build_and_Deploy_Backend
-    displayName: 'Deploy Backend'
-    jobs:
-      - job: Deploy_Azure
-        pool:
-          vmImage: 'ubuntu-latest'
-        steps:
-          - task: NodeTool@0
-            inputs:
-              versionSpec: '22.x'
-            displayName: 'Install Node.js 22'
-
-          - script: |
-              yarn install --ignore-engines
-            displayName: 'Install Dependencies with Yarn'
-
-          - task: AzureWebApp@1
-            inputs:
-              azureSubscription: 'MyAzureConnection'
-              appName: $(azureWebAppName)
-              package: '$(System.DefaultWorkingDirectory)'
-            displayName: 'Deploy to Azure Web App'
-
-  - stage: Build_Android
-    displayName: 'Build Android App'
-    dependsOn: Build_and_Deploy_Backend
-    jobs:
-  - job: Build_APK_AAB
+- stage: Build_and_Deploy_Backend
+  displayName: 'Deploy Backend'
+  jobs:
+  - job: Deploy_Azure
     pool:
       vmImage: 'ubuntu-latest'
-    variables:
-      - group: visionly-secrets
     steps:
-      - task: NodeTool@0
-        inputs:
-          versionSpec: '22.x'
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '22.x'
+      displayName: 'Install Node.js 22'
 
-      - script: yarn install --ignore-engines
-        displayName: 'Install Dependencies'
+    - script: |
+        yarn install --ignore-engines
+      displayName: 'Install Dependencies with Yarn'
 
-      - script: echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
-        displayName: 'Inject Gemini API Key'
+    - task: AzureWebApp@1
+      inputs:
+        azureSubscription: 'MyAzureConnection'
+        appName: $(azureWebAppName)
+        package: '$(System.DefaultWorkingDirectory)'
+      displayName: 'Deploy to Azure Web App'
 
-      # Task untuk mendownload file Keystore secara aman
-      - task: DownloadSecureFile@1
-        name: releaseKeystore
-        inputs:
-          secureFile: 'visionly-release.keystore'
+- stage: Build_Android
+  displayName: 'Build Android App'
+  dependsOn: Build_and_Deploy_Backend 
+  jobs:
+  - job: Build_APK_AAB
+    pool:
+      vmImage: 'ubuntu-latest' 
+    variables:
+    - group: visionly-secrets
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '22.x'
+      displayName: 'Install Node.js 22'
+    
+    - script: |
+        yarn install --ignore-engines
+      displayName: 'Install Dependencies'
 
-      - script: |
-          cd android
-          chmod +x gradlew
-          # Build AAB dalam mode Release
-          ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=$(releaseKeystore.secureFilePath) \
-            -Pandroid.injected.signing.store.password=$(KEYSTORE_PASSWORD) \
-            -Pandroid.injected.signing.key.alias=$(KEY_ALIAS) \
-            -Pandroid.injected.signing.key.password=$(KEY_PASSWORD)
-        displayName: 'Build Signed Android Bundle (.aab)'
+    - script: |
+        echo "GEMINI_API_KEY=$(GEMINI_API_KEY)" > .env
+      displayName: 'Inject Gemini API Key'
 
-      - task: PublishBuildArtifacts@1
-        inputs:
-          PathtoPublish: 'android/app/build/outputs/bundle/release'
-          ArtifactName: 'Android-App-Bundle-Signed'
-          publishLocation: 'Container'
+    - task: DownloadSecureFile@1
+      name: releaseKeystore
+      inputs:
+        secureFile: 'visionly-release.keystore'
+      displayName: 'Download Keystore'
+
+    - script: |
+        cd android
+        chmod +x gradlew
+        ./gradlew bundleRelease \
+          -Pandroid.injected.signing.store.file=$(releaseKeystore.secureFilePath) \
+          -Pandroid.injected.signing.store.password=$(KEYSTORE_PASSWORD) \
+          -Pandroid.injected.signing.key.alias=$(KEY_ALIAS) \
+          -Pandroid.injected.signing.key.password=$(KEY_PASSWORD)
+      displayName: 'Build Signed Android Bundle (.aab)'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'android/app/build/outputs/bundle/release'
+        ArtifactName: 'Android-App-Bundle-Signed'
+        publishLocation: 'Container'
+      displayName: 'Publish Artifact'
